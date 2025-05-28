@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Indian Derivative Stocks OI Analyzer</title>
+    <style>
+        /* Reset and base */
+        body {
+            margin: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #121212;
+            color: #e0e0e0;
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+        }
+        header {
+            background: #1f1f1f;
+            padding: 20px 30px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.7);
+            text-align: center;
+        }
+        header h1 {
+            margin: 0;
+            font-weight: 700;
+            font-size: 1.8rem;
+            color: #4fc3f7;
+            user-select: none;
+        }
+        main {
+            flex: 1;
+            display: flex;
+            padding: 20px;
+            gap: 20px;
+            max-width: 1200px;
+            margin: 0 auto;
+            width: 100%;
+        }
+        #stock-list, #strike-details {
+            background: #222;
+            border-radius: 12px;
+            padding: 20px;
+            flex: 1;
+            overflow-y: auto;
+            box-shadow: 0 8px 16px rgba(79,195,247,0.2);
+        }
+        #stock-list {
+            max-width: 400px;
+        }
+        h2 {
+            margin-top: 0;
+            margin-bottom: 15px;
+            color: #4fc3f7;
+        }
+        ul {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+        li.stock-item {
+            cursor: pointer;
+            padding: 12px 10px;
+            border-radius: 8px;
+            margin-bottom: 8px;
+            background: #1a1a1a;
+            transition: background-color 0.25s ease;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        li.stock-item:hover {
+            background: #3a78d8;
+            color: #fff;
+        }
+        li.stock-item.selected {
+            background: #0d47a1;
+            color: white;
+            font-weight: bold;
+        }
+        .stock-name {
+            font-size: 1.1rem;
+        }
+        .stock-oi-change {
+            font-family: 'Consolas', monospace;
+            color: #81d4fa;
+        }
+        #strike-details table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        #strike-details th, #strike-details td {
+            padding: 10px 8px;
+            border-bottom: 1px solid #444;
+            text-align: left;
+            font-size: 0.95rem;
+        }
+        #strike-details th {
+            color: #81d4fa;
+            border-bottom: 2px solid #4fc3f7;
+        }
+        #strike-details tr:hover {
+            background-color: #333;
+        }
+        .oi-positive {
+            color: #4caf50; /* green */
+            font-weight: 600;
+        }
+        .oi-negative {
+            color: #e53935; /* red */
+            font-weight: 600;
+        }
+        .strike-impacted {
+            background-color: rgba(79, 195, 247, 0.15);
+            font-weight: 700;
+        }
+        footer {
+            text-align: center;
+            padding: 12px 0;
+            background: #1f1f1f;
+            font-size: 0.85rem;
+            color: #666;
+            user-select:none;
+        }
+        @media (max-width: 768px) {
+            main {
+                flex-direction: column;
+            }
+            #stock-list, #strike-details {
+                max-width: 100%;
+                height: 400px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>Indian Derivative Stocks OI Analyzer</h1>
+    </header>
+    <main>
+        <section id="stock-list-section">
+            <h2>Ranked Stocks by OI Change</h2>
+            <ul id="stock-list">
+                <li>Loading stocks...</li>
+            </ul>
+        </section>
+        <section id="strike-details">
+            <h2>Strike Details</h2>
+            <p id="no-selection">Select a stock to see strike details</p>
+            <div id="strike-table-container" style="display:none;">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Strike Price</th>
+                            <th>OI Change</th>
+                            <th>Buyers / Sellers</th>
+                        </tr>
+                    </thead>
+                    <tbody id="strike-details-body">
+                        <!-- dynamically filled -->
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </main>
+    <footer>
+        Powered by Dhan API | Built with ❤️
+    </footer>
+    <script>
+        const API_TOKEN = "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzUxMiJ9.eyJpc3MiOiJkaGFuIiwicGFydG5lcklkIjoiIiwiZXhwIjoxNzUxMDAxMjMwLCJ0b2tlbkNvbnN1bWVyVHlwZSI6IlNFTEYiLCJ3ZWJob29rVXJsIjoiIiwiZGhhbkNsaWVudElkIjoiMTEwMjQ3OTcwNyJ9.vxBeusqYPamm5tlutbwj1qQbB41zzxwbVcomTT-pZ2q9vjnKZZM3trIMA8eGjy4cz8zCLVJ9K6opBHNiXA325g";
+&nbsp;
+&nbsp;
+
+        // Placeholder API URL - replace with actual endpoint of Dhan derivatives OI data
+        const API_URL = 'https://api.dhan.com/v1/derivatives/open-interest';
+&nbsp;
+&nbsp;
+
+        // Elements
+        const stockListEl = document.getElementById('stock-list');
+        const strikeContainer = document.getElementById('strike-table-container');
+        const strikeTableBody = document.getElementById('strike-details-body');
+        const noSelectionText = document.getElementById('no-selection');
+&nbsp;
+&nbsp;
+
+        // State
+        let stocksData = [];
+        let selectedStockIndex = -1;
+&nbsp;
+&nbsp;
+
+        // Utility function to format numbers with commas
+        function formatNumber(num) {
+            return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+        }
+&nbsp;
+&nbsp;
+
+        // Utility to classify OI change for styling buyer/seller activity
+        function classifyOIChange(oiChange) {
+            if (oiChange > 0) return 'oi-positive';
+            else if (oiChange < 0) return 'oi-negative';
+            return '';
+        }
+&nbsp;
+&nbsp;
+
+        // Determine if strike is "impacted" by threshold on abs OI change
+        function isImpacted(oiChange) {
+            return Math.abs(oiChange) >= 1000; // threshold, adjust as needed
+        }
+&nbsp;
+&nbsp;
+
+        // Fetch stocks data from API (simulation or real)
+        async function fetchStocksData() {
+            try {
+                // Uncomment this for real fetch when API details are provided
+                /*
+                const response = await fetch(API_URL, {
+                    headers: {
+                        'Authorization': 'Bearer ' + API_TOKEN,
+                        'Content-Type': 'application/json'
+                    }
+                });
+                if (!response.ok) throw new Error('API fetch failed');
+                const data = await response.json();
+                return data;
+                */
+&nbsp;
+&nbsp;
+
+                // Simulated data structure example:
+                return [
+                    {
+                        symbol: "NIFTY",
+                        oi_change: 5000,
+                        strikes: [
+                            { strike_price: 15000, oi_change: 1200, buyers_sellers: "Buyers" },
+                            { strike_price: 14900, oi_change: -1100, buyers_sellers: "Sellers" },
+                            { strike_price: 14800, oi_change: 300, buyers_sellers: "Buyers" }
+                        ]
+                    },
+                    {
+                        symbol: "BANKNIFTY",
+                        oi_change: 4300,
+                        strikes: [
+                            { strike_price: 35000, oi_change: 1500, buyers_sellers: "Buyers" },
+                            { strike_price: 34900, oi_change: 800, buyers_sellers: "Buyers" },
+                            { strike_price: 34800, oi_change: -2500, buyers_sellers: "Sellers" }
+                        ]
+                    },
+                    {
+                        symbol: "RELIANCE",
+                        oi_change: 2700,
+                        strikes: [
+                            { strike_price: 2200, oi_change: 2000, buyers_sellers: "Buyers" },
+                            { strike_price: 2150, oi_change: -300, buyers_sellers: "Sellers" },
+                            { strike_price: 2100, oi_change: 450, buyers_sellers: "Buyers" }
+                        ]
+                    }
+                ];
+            } catch (error) {
+                console.error("Error fetching stock data:", error);
+                return [];
+            }
+        }
+&nbsp;
+&nbsp;
+
+        // Render stock list
+        function renderStockList(stocks) {
+            stockListEl.innerHTML = '';
+            if (!stocks.length) {
+                stockListEl.innerHTML = '<li>No data available</li>';
+                return;
+            }
+            stocks.forEach((stock, idx) => {
+                const li = document.createElement('li');
+                li.classList.add('stock-item');
+                if (idx === selectedStockIndex) li.classList.add('selected');
+                li.tabIndex = 0;
+                li.setAttribute('role', 'button');
+                li.setAttribute('aria-pressed', (idx === selectedStockIndex).toString());
+&nbsp;
+&nbsp;
+
+                li.addEventListener('click', () => {
+                    if (selectedStockIndex === idx) {
+                        selectedStockIndex = -1;
+                    } else {
+                        selectedStockIndex = idx;
+                    }
+                    renderStockList(stocks);
+                    renderStrikeDetails(stocks[selectedStockIndex]);
+                });
+                li.addEventListener('keydown', (e) => {
+                    if(e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        li.click();
+                    }
+                });
+&nbsp;
+&nbsp;
+
+                li.innerHTML = `
+                    <span class="stock-name">${stock.symbol}</span>
+                    <span class="stock-oi-change">${formatNumber(stock.oi_change)}</span>
+                `;
+                stockListEl.appendChild(li);
+            });
+        }
+&nbsp;
+&nbsp;
+
+        // Render strikes for selected stock
+        function renderStrikeDetails(stock) {
+            if (!stock) {
+                strikeContainer.style.display = 'none';
+                noSelectionText.style.display = 'block';
+                return;
+            }
+            noSelectionText.style.display = 'none';
+            strikeContainer.style.display = 'block';
+&nbsp;
+&nbsp;
+
+            strikeTableBody.innerHTML = '';
+&nbsp;
+&nbsp;
+
+            stock.strikes.forEach(strike => {
+                const tr = document.createElement('tr');
+                if (isImpacted(strike.oi_change)) {
+                    tr.classList.add('strike-impacted');
+                }
+                tr.innerHTML = `
+                    <td>${strike.strike_price}</td>
+                    <td class="${classifyOIChange(strike.oi_change)}">${formatNumber(strike.oi_change)}</td>
+                    <td>${strike.buyers_sellers}</td>
+                `;
+                strikeTableBody.appendChild(tr);
+            });
+        }
+&nbsp;
+&nbsp;
+
+        async function init() {
+            stocksData = await fetchStocksData();
+            renderStockList(stocksData);
+            renderStrikeDetails(null);
+        }
+&nbsp;
+&nbsp;
+
+        // Initialize application
+        init();
+    </script>
+</body>
+</html>
+&nbsp;
+&nbsp;
